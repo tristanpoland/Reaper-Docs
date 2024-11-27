@@ -6,6 +6,8 @@ use rocket::response::status::NotFound;
 use rocket_dyn_templates::Template;
 use rocket::http::Status;
 use serde::Serialize;
+use chrono::Duration;
+use uuid::Uuid;
 use std::path::{Path, PathBuf};
 use std::fs;
 use walkdir::WalkDir;
@@ -103,6 +105,17 @@ pub fn init_db() -> SqliteResult<()> {
         [],
     )?;
     
+    // Add to database setup
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            expires TIMESTAMP NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )",
+        [],
+    )?;
+    
     // Create admin user if it doesn't exist
     let admin_exists: bool = conn
         .query_row(
@@ -127,27 +140,31 @@ pub fn init_db() -> SqliteResult<()> {
 pub struct AuthenticatedUser(User);
 
 #[rocket::async_trait]
+#[rocket::async_trait]
 impl<'r> FromRequest<'r> for AuthenticatedUser {
     type Error = ();
-
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let cookies = request.cookies();
-        
-        match cookies.get("user_id") {
-            Some(cookie) => {
-                if let Ok(user_id) = cookie.value().parse::<i64>() {
-                    if let Some(conn) = request.rocket().state::<Mutex<Connection>>() {
-                        if let Ok(conn) = conn.lock() {
-                            if let Ok(user) = get_user_by_id(&conn, user_id) {
-                                return Outcome::Success(AuthenticatedUser(user));
-                            }
-                        }
-                    }
+        if let Some(cookie) = request.cookies().get_private("session") {
+            let conn = match request.guard::<&State<Mutex<Connection>>>().await {
+                Outcome::Success(conn) => conn,
+                _ => return Outcome::Error((Status::InternalServerError, ())),
+            };
+
+            let conn = match conn.lock() {
+                Ok(conn) => conn,
+                _ => return Outcome::Error((Status::InternalServerError, ())),
+            };
+
+            if let Ok(user_id) = conn.query_row(
+                "SELECT user_id FROM sessions WHERE token = ? AND expires > datetime('now')",
+                params![cookie.value()],
+                |row| row.get::<_, i64>(0)
+            ) {
+                if let Ok(user) = get_user_by_id(&conn, user_id) {
+                    return Outcome::Success(AuthenticatedUser(user));
                 }
             }
-            None => (),
         }
-        
         Outcome::Forward(Status::Unauthorized)
     }
 }
@@ -168,6 +185,26 @@ fn get_user_by_id(conn: &Connection, id: i64) -> SqliteResult<User> {
     )
 }
 
+fn verify_credentials(conn: &Connection, username: &str, password: &str) -> SqliteResult<User> {
+    let user: User = conn.query_row(
+        "SELECT id, username, email, role, password FROM users WHERE username = ?",
+        params![username],
+        |row| {
+            let stored_hash: String = row.get(4)?;
+            if !verify(password, &stored_hash).map_err(|_| rusqlite::Error::InvalidQuery)? {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+            Ok(User {
+                id: row.get(0)?,
+                username: row.get(1)?,
+                email: row.get(2)?,
+                role: row.get(3)?,
+            })
+        },
+    )?;
+    Ok(user)
+}
+
 // Route handlers
 #[get("/login")]
 pub fn login_page() -> Template {
@@ -179,29 +216,21 @@ pub fn login_page() -> Template {
 #[post("/login", data = "<form>")]
 pub fn login(form: Form<LoginForm>, cookies: &CookieJar<'_>, conn: &State<Mutex<Connection>>) -> Result<Redirect, Status> {
     let conn = conn.lock().map_err(|_| Status::InternalServerError)?;
+    let result = verify_credentials(&conn, &form.username, &form.password)
+        .map_err(|_| Status::Unauthorized)?;
     
-    let mut stmt = conn.prepare("SELECT id, password FROM users WHERE username = ?")
-        .map_err(|_| Status::InternalServerError)?;
+    let token = Uuid::new_v4().to_string();
+    let expires = Utc::now() + Duration::hours(24);
     
-    let result: SqliteResult<(i64, String)> = stmt.query_row(
-        params![form.username],
-        |row| Ok((row.get(0)?, row.get(1)?))
-    );
+    conn.execute(
+        "INSERT INTO sessions (token, user_id, expires) VALUES (?, ?, ?)",
+        params![token, result.id, expires.to_rfc3339()],
+    ).map_err(|_| Status::InternalServerError)?;
 
-    match result {
-        Ok((user_id, hashed_password)) => {
-            if verify(&form.password, &hashed_password).unwrap_or(false) {
-                cookies.add(Cookie::new("user_id", user_id.to_string()));
-                Ok(Redirect::to(uri!(index)))
-            } else {
-                Err(Status::Unauthorized)
-            }
-        }
-        Err(_) => Err(Status::Unauthorized),
-    }
+    cookies.add_private(Cookie::new("session", token));
+    Ok(Redirect::to(uri!(index)))
 }
 
-// Add this get route for the registration page
 #[get("/register")]
 pub fn register_page() -> Template {
     Template::render("register", context! {
@@ -228,10 +257,11 @@ pub fn register(form: Form<RegisterForm>, conn: &State<Mutex<Connection>>) -> Re
     Ok(Redirect::to(uri!(login_page)))
 }
 
+
 #[get("/logout")]
-pub fn logout(cookies: &CookieJar<'_>) -> Redirect {
-    cookies.remove(Cookie::named("user_id"));
-    Redirect::to(uri!(login_page))
+pub fn logout(cookies: &CookieJar<'_>) -> Result<Redirect, Status> {
+    cookies.remove_private(Cookie::named("session"));
+    Ok(Redirect::to(uri!(login_page)))
 }
 
 #[get("/profile")]
@@ -391,9 +421,8 @@ async fn edit_doc(user: AuthenticatedUser, path: PathBuf, state: &State<AppState
         user: user.0
     }))
 }
-
 #[post("/save/<path..>", data = "<form>")]
-async fn save_doc(user: AuthenticatedUser, path: PathBuf, form: Form<DocEdit>, state: &State<AppState>) -> Result<Redirect, NotFound<String>> {
+async fn save_doc(_user: AuthenticatedUser, path: PathBuf, form: Form<DocEdit>, state: &State<AppState>) -> Result<Redirect, NotFound<String>> {
     let full_path = state.docs_path.join(&path);
     fs::write(&full_path, &form.content)
         .map_err(|e| NotFound(e.to_string()))?;
