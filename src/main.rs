@@ -338,7 +338,7 @@ pub fn update_profile(user: AuthenticatedUser, form: Form<UserUpdateForm>, conn:
 }
 
 // Admin routes
-#[get("/admin/users")]
+#[get("/admin")]
 pub fn list_users(user: AuthenticatedUser) -> Result<Template, Status> {
     if user.0.role != "admin" {
         return Err(Status::Forbidden);
@@ -359,7 +359,7 @@ pub fn list_users(user: AuthenticatedUser) -> Result<Template, Status> {
 
     let users = users.map_err(|_| Status::InternalServerError)?;
 
-    Ok(Template::render("admin/users", context! {
+    Ok(Template::render("admin", context! {
         title: "User Management",
         users: users
     }))
