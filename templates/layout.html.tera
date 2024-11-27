@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Documentation Site</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <a href="/" class="flex items-center">
+                        <span class="text-xl font-bold">Documentation Site</span>
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    {% if user %}
+                        <a href="/search" class="text-gray-600 hover:text-gray-900">Search</a>
+                        {% if user.role == "admin" %}
+                            <a href="/admin/users" class="text-gray-600 hover:text-gray-900">Users</a>
+                        {% endif %}
+                        <a href="/profile" class="text-gray-600 hover:text-gray-900">Profile</a>
+                        <form action="/logout" method="POST" class="inline">
+                            <button type="submit" class="text-gray-600 hover:text-gray-900">Logout</button>
+                        </form>
+                    {% else %}
+                        <a href="/login" class="text-gray-600 hover:text-gray-900">Login</a>
+                        <a href="/register" class="text-gray-600 hover:text-gray-900">Register</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-8">
+        {% if flash %}
+            <div class="mb-4 p-4 rounded-lg {{ flash.type }}">
+                {{ flash.message }}
+            </div>
+        {% endif %}
+        {% block content %}{% endblock content %}
+    </main>
+
+    <footer class="bg-white shadow-md mt-8">
+        <div class="max-w-7xl mx-auto py-6 px-4">
+            <p class="text-center text-gray-600">© 2024 Documentation Site. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>
