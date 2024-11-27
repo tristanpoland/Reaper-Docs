@@ -1,0 +1,147 @@
+{% extends "base" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="border border-gray-800 bg-black rounded-lg p-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-white">Documentation</h1>
+            <p class="text-gray-400 mt-2">{{ docs|length }} documents in your knowledge base</p>
+        </div>
+        
+        <!-- New Document Button -->
+        <button onclick="showNewDocModal()" 
+                class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
+                       transition-colors flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            New Document
+        </button>
+    </div>
+
+    <!-- Grid of Documents -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for doc in docs %}
+        <div class="border border-gray-800 bg-black rounded-lg overflow-hidden 
+                    hover:border-gray-700 transition-all duration-200 group">
+            <!-- Card Preview Area -->
+            <div class="h-32 bg-gradient-to-br from-gray-900 to-gray-800 p-6 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </div>
+            
+            <!-- Card Content -->
+            <div class="p-6">
+                <div class="flex justify-between items-start">
+                    <a href="/doc/{{ doc.path }}" 
+                       class="text-lg font-medium text-blue-400 group-hover:text-blue-300 
+                              flex items-center gap-2 mb-2">
+                        {{ doc.title }}
+                        <svg xmlns="http://www.w3.org/2000/svg" 
+                             class="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" 
+                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M9 5l7 7-7 7" />
+                        </svg>
+                    </a>
+                    <a href="/edit/{{ doc.path }}" 
+                       class="text-gray-500 hover:text-gray-300 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" 
+                             class="h-5 w-5" viewBox="0 0 20 20" 
+                             fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                    </a>
+                </div>
+                
+                <p class="text-sm text-gray-400 line-clamp-2 mb-4">{{ doc.preview }}</p>
+                
+                <div class="flex justify-between items-center text-xs text-gray-500">
+                    <div class="flex items-center gap-4">
+                        <span>{{ doc.word_count }} words</span>
+                        <span>{{ doc.reading_time }} min read</span>
+                    </div>
+                    <span>{{ doc.modified }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- New Document Modal -->
+    <div id="newDocModal" 
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden"
+         style="backdrop-filter: blur(4px);">
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold text-white mb-4">Create New Document</h2>
+            
+            <form id="newDocForm" class="space-y-4">
+                <div>
+                    <label for="title" class="block text-sm font-medium text-gray-400 mb-2">
+                        Document Title
+                    </label>
+                    <input type="text" id="title" name="title" required
+                           class="w-full px-4 py-2 bg-black border border-gray-800 rounded-lg
+                                  text-white placeholder-gray-600 focus:outline-none focus:ring-2 
+                                  focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6">
+                    <button type="button" onclick="hideNewDocModal()"
+                            class="px-4 py-2 text-gray-400 hover:text-white transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
+                                   transition-colors">
+                        Create
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const modal = document.getElementById('newDocModal');
+const form = document.getElementById('newDocForm');
+
+function showNewDocModal() {
+    modal.classList.remove('hidden');
+}
+
+function hideNewDocModal() {
+    modal.classList.add('hidden');
+}
+
+// Close modal when clicking outside
+modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+        hideNewDocModal();
+    }
+});
+
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    
+    try {
+        const response = await fetch('/new', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const path = await response.text();
+            window.location.href = `/edit/${path}`;
+        } else {
+            alert('Failed to create document');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to create document');
+    }
+});
+</script>
+{% endblock %}

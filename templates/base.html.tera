@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %} - Documentation Site</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+        body {
+            background-color: #000000;
+            color: #ffffff;
+        }
+        .search-input {
+            transition: all 0.3s ease;
+            border: 1px solid #333;
+        }
+        .search-input:focus {
+            border-color: #444;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+        .nav-blur {
+            backdrop-filter: blur(10px);
+            background-color: rgba(17, 17, 17, 0.7);
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <nav class="fixed w-full nav-blur border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="/" class="text-xl font-bold text-white hover:text-blue-400 transition-colors">
+                        Docs
+                    </a>
+                    <div class="flex items-center">
+                        <form action="/search" method="get" class="flex">
+                            <input 
+                                type="text" 
+                                name="q" 
+                                placeholder="Search documentation..."
+                                class="search-input w-80 px-4 py-2 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none"
+                            >
+                        </form>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/api" class="text-gray-300 hover:text-white transition-colors">API</a>
+                    <a href="/guides" class="text-gray-300 hover:text-white transition-colors">Guides</a>
+                    <a href="/examples" class="text-gray-300 hover:text-white transition-colors">Examples</a>
+                    <a href="https://github.com" target="_blank" class="text-gray-300 hover:text-white transition-colors">
+                        GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto pt-20 px-4 sm:px-6 lg:px-8">
+        <div class="py-6">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+</body>
+</html>
